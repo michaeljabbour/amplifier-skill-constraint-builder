@@ -1,10 +1,45 @@
 # Constraint Builder
 
-Turn an action boundary into a testable constraint harness, with legal actions still possible.
+Give your agent a boundary it can actually test.
 
-## Consolidated capability
+For developers building agent tools. Turn “the agent may do this, but never that” into an action specification, a checker and examples that show whether useful work is still possible.
 
-Portable method: [skills/constraint-builder/SKILL.md](skills/constraint-builder/SKILL.md). Install with `python3 scripts/capability.py install --dest ~/.agents/skills`. See [consolidation and runtime boundaries](docs/CONSOLIDATION.md). The retained source guide below documents the optional original host integration and historical evidence; it is not a new outcome claim.
+[Explore the site](https://michaeljabbour.github.io/amplifier-skill-constraint-builder/)
+
+## What you get
+
+- **Catch an escaped action.** Put the check at the dispatch boundary, where an action can be accepted or refused.
+- **Keep valid work possible.** Test allowed actions alongside forbidden ones, so a boundary does not win by blocking everything.
+- **Know what remains untested.** Keep unseen cases, enforcement limits and the next acceptance test visible.
+
+## Start here
+
+```sh
+git clone https://github.com/michaeljabbour/amplifier-skill-constraint-builder.git
+cd amplifier-skill-constraint-builder
+python3 scripts/capability.py install --dest ~/.agents/skills
+```
+
+This installs the portable method and its packaged references into your agent skill folder. If your host uses another folder, pass that path to `--dest`. Start a new session or use your host’s skill refresh so it can discover the installed skill. Optional native tools are installed separately.
+
+Try this first task:
+
+> Use Constraint Builder to specify a file-reading tool that may read project files but may not escape its root. Show legal reads, traversal attempts, symlink cases and false rejections before proposing a checker. Do not execute the proposed actions.
+
+## What you need
+
+- Python 3.11 or later for the portable install helper.
+- The portable skill and local checker use Python 3. No model key is needed to install or inspect them.
+- The checker evaluates trusted candidate Python locally; it is not an isolation boundary for hostile code.
+- The original Pico, Nano, Micro and provider-backed refinement engines are optional.
+
+## Evidence and limits
+
+Local gate and scaffold tests exercise legal actions, illegal actions and failure paths. The provider-backed refinement loop and deployment into a real dispatch boundary require separate acceptance.
+
+The worked examples on the site are fictional. They illustrate the output and decisions; they are not user results or measured benefit. See [consolidation and runtime boundaries](docs/CONSOLIDATION.md) for retained interfaces and acceptance scope.
+
+---
 
 ## Retained source guide
 

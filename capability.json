@@ -25,8 +25,8 @@
   ],
   "examples": [
     {
-      "title": "Fictional worked example",
-      "brief": "A fictional task illustrating Constraint Builder.",
+      "title": "Keep a file reader inside its root",
+      "brief": "Use Constraint Builder to specify a file-reading tool that may read project files but may not escape its root. Show legal reads, traversal attempts, symlink cases and false rejections before proposing a checker. Do not execute the proposed actions.",
       "before": "A broad deny rule blocks every file operation.",
       "after": "A boundary specification and traversal/symlink cases distinguish allowed reads from escaped paths.",
       "why": "A measured false-rejection check preserves useful actions while testing the boundary.",
@@ -78,5 +78,58 @@
   "docs": [
     "docs/CONSOLIDATION.md"
   ],
-  "publication_status": "Installation and evidence scopes are documented below."
+  "publication_status": "Installation and evidence scopes are documented below.",
+  "marketing": {
+    "headline": "Give your agent a boundary it can actually test.",
+    "lead": "For developers building agent tools. Turn “the agent may do this, but never that” into an action specification, a checker and examples that show whether useful work is still possible.",
+    "benefits": [
+      {
+        "title": "Catch an escaped action",
+        "body": "Put the check at the dispatch boundary, where an action can be accepted or refused."
+      },
+      {
+        "title": "Keep valid work possible",
+        "body": "Test allowed actions alongside forbidden ones, so a boundary does not win by blocking everything."
+      },
+      {
+        "title": "Know what remains untested",
+        "body": "Keep unseen cases, enforcement limits and the next acceptance test visible."
+      }
+    ],
+    "walkthrough": [
+      {
+        "title": "Describe the boundary",
+        "detail": "Name the real state, allowed actions, irreversible costs and anything a checker cannot decide."
+      },
+      {
+        "title": "Build the smallest checker",
+        "detail": "Write legal and illegal examples before tuning a validator. Start with a local gate before adding an optional engine."
+      },
+      {
+        "title": "Challenge both sides",
+        "detail": "Test escapes and false rejections, then keep the measured result and the unresolved cases."
+      }
+    ],
+    "use_when": [
+      "You are adding an agent action that needs a testable boundary.",
+      "A guard blocks legitimate work or allows a forbidden action.",
+      "You need a held-out test set before refining a constraint."
+    ],
+    "not_for": [
+      "A prompt-only guarantee of containment.",
+      "A substitute for a real sandbox, dispatch integration or a legal review."
+    ],
+    "quickstart_prompt": "Use Constraint Builder to specify a file-reading tool that may read project files but may not escape its root. Show legal reads, traversal attempts, symlink cases and false rejections before proposing a checker. Do not execute the proposed actions.",
+    "output_preview": "Boundary: reads stay inside the selected project root\n\nAction                         Expected    Reason\nread docs/guide.md             allow       ordinary project read\nread ../outside.txt           refuse      escapes the root\nread linked-secret.txt        refuse      resolved target is outside\nread missing.txt              error       not an access-policy violation\n\nNext gate: exercise the checker at the real dispatch boundary.",
+    "example_note": "Fictional file-tool design. These are expected cases for a proposed checker, not a claim of sandbox enforcement.",
+    "install_notes": [
+      "Python 3.11 or later is required by the portable install/build helper. The installed method runs through your agent host.",
+      "The portable skill and local checker use Python 3. No model key is needed to install or inspect them.",
+      "The checker evaluates trusted candidate Python locally; it is not an isolation boundary for hostile code.",
+      "The original Pico, Nano, Micro and provider-backed refinement engines are optional."
+    ],
+    "proof_summary": "Local gate and scaffold tests exercise legal actions, illegal actions and failure paths. The provider-backed refinement loop and deployment into a real dispatch boundary require separate acceptance.",
+    "next_step": "Start with one action boundary and an explicit list of cases the checker must distinguish."
+  },
+  "repository_url": "https://github.com/michaeljabbour/amplifier-skill-constraint-builder"
 }
