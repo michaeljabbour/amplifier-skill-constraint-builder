@@ -45,7 +45,7 @@ The worked examples on the site are fictional. They illustrate the output and de
 
 ### amplifier-bundle-harness-machine
 
-Generate constraint harnesses for LLM agents — from tiny nano-amplifiers to enterprise-scale governance systems. Built on the AutoHarness paper (Lou et al., Google DeepMind, 2026), this bundle provides an eight-mode interactive pipeline and six automation recipes for systematically designing, generating, critiquing, refining, and evaluating constraint harnesses. Whether you're constraining a game-playing agent's action space or building a factory that generates harnesses for dozens of environments, harness-machine gives you the structure to do it rigorously and repeatably.
+The retained native bundle provides eight mode adapters and six automation recipes for constraint design and refinement through a configured Amplifier host. The portable method above works independently through an ordinary agent. The optional engines draw on the AutoHarness research approach; their presence does not establish production governance or unseen-action safety.
 
 ## Eight-Mode Pipeline
 
@@ -192,23 +192,22 @@ load_skill(skill_name="constraint-design")
 load_skill(skill_name="convergence-debugging")
 ```
 
-## Prerequisites
+## Optional native integration prerequisites
+
+These requirements apply to the retained Amplifier bundle, not the portable skill or local checker.
 
 - [Amplifier](https://github.com/microsoft/amplifier) installed and configured
 - [amplifier-foundation](https://github.com/microsoft/amplifier-foundation) bundle (auto-installed via `includes`)
 
-## Installation
+## Register the optional native bundle
+
+After configuring Amplifier and its provider, register the canonical public source for discovery:
 
 ```bash
-amplifier bundle install git+https://github.com/YOUR_ORG/amplifier-bundle-autoharness@main
+amplifier bundle add git+https://github.com/michaeljabbour/amplifier-skill-constraint-builder@main
 ```
 
-Or clone and install locally:
-
-```bash
-git clone https://github.com/YOUR_ORG/amplifier-bundle-autoharness
-amplifier bundle install ./amplifier-bundle-autoharness
-```
+Registration does not activate the bundle or run a refinement job. Inspect the installed CLI with `amplifier bundle --help` before choosing that optional execution path.
 
 ## Research Foundation
 
