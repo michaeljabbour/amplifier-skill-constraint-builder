@@ -86,10 +86,14 @@ class ConstraintGate:
                 )
             safe_params = parameters if parameters is not None else {}
             if self._signature == "is_legal_action":
-                return self._fn(tool_name, safe_params)
+                result = self._fn(tool_name, safe_params)
             else:
                 state = {"project_root": self.project_root}
                 action = {"tool_name": tool_name, "parameters": safe_params}
-                return self._fn(state, action)
+                result = self._fn(state, action)
+            if (not isinstance(result, tuple) or len(result) != 2
+                    or type(result[0]) is not bool or not isinstance(result[1], str)):
+                return False, "Constraint returned an invalid result; expected (bool, reason)"
+            return result
         except Exception as exc:
             return False, f"Constraint check error: {exc}"

@@ -1,4 +1,14 @@
-# amplifier-bundle-harness-machine
+# Constraint Builder
+
+Turn an action boundary into a testable constraint harness, with legal actions still possible.
+
+## Consolidated capability
+
+Portable method: [skills/constraint-builder/SKILL.md](skills/constraint-builder/SKILL.md). Install with `python3 scripts/capability.py install --dest ~/.agents/skills`. See [consolidation and runtime boundaries](docs/CONSOLIDATION.md). The retained source guide below documents the optional original host integration and historical evidence; it is not a new outcome claim.
+
+## Retained source guide
+
+### amplifier-bundle-harness-machine
 
 Generate constraint harnesses for LLM agents — from tiny nano-amplifiers to enterprise-scale governance systems. Built on the AutoHarness paper (Lou et al., Google DeepMind, 2026), this bundle provides an eight-mode interactive pipeline and six automation recipes for systematically designing, generating, critiquing, refining, and evaluating constraint harnesses. Whether you're constraining a game-playing agent's action space or building a factory that generates harnesses for dozens of environments, harness-machine gives you the structure to do it rigorously and repeatably.
 

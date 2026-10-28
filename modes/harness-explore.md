@@ -51,7 +51,7 @@ When entering harness-explore mode, create this todo checklist immediately:
 
 ## The Process
 
-Before starting Phase 1, check for relevant skills: `load_skill(search="harness")`.
+Before starting Phase 1, check for relevant skills: `load_skill(skill_name="constraint-builder")`.
 
 ### Phase 1: Understand the Target
 

@@ -1,0 +1,81 @@
+{
+  "id": "constraint-builder",
+  "display_name": "Constraint Builder",
+  "kind": "skill",
+  "promise": "Turn an action boundary into a testable constraint harness, with legal actions still possible.",
+  "audience": "People building agent tools, action validators and bounded environments.",
+  "trigger": "Design, repair or evaluate constraints on agent actions.",
+  "skill_path": "skills/constraint-builder",
+  "modes": [
+    {
+      "name": "Explore",
+      "when": "The action boundary is unclear.",
+      "output": "An action/state model and explicit feasibility limits."
+    },
+    {
+      "name": "Build",
+      "when": "The boundary is agreed.",
+      "output": "A spec, validator and tests for legal and illegal actions."
+    },
+    {
+      "name": "Debug",
+      "when": "A harness blocks valid work or leaks illegal actions.",
+      "output": "A focused failure diagnosis and measured refinement."
+    }
+  ],
+  "examples": [
+    {
+      "title": "Fictional worked example",
+      "brief": "A fictional task illustrating Constraint Builder.",
+      "before": "A broad deny rule blocks every file operation.",
+      "after": "A boundary specification and traversal/symlink cases distinguish allowed reads from escaped paths.",
+      "why": "A measured false-rejection check preserves useful actions while testing the boundary.",
+      "fictional": true
+    }
+  ],
+  "boundaries": [
+    "A skill alone does not enforce a sandbox or establish legal compliance."
+  ],
+  "install_commands": [
+    "python3 scripts/capability.py install --dest ~/.agents/skills"
+  ],
+  "runtime_install_commands": [],
+  "verification": [
+    {
+      "name": "Functional acceptance",
+      "command": "python3 scripts/functional_gate.py",
+      "expected": "Supplied fictional tasks exercise actual mechanisms and failure boundaries.",
+      "status": "passed",
+      "evidence": "72 native gate/scaffold checks passed; provider-backed loop needs optional litellm and was not accepted."
+    },
+    {
+      "name": "Native host acceptance",
+      "command": "See retained source integration guide",
+      "expected": "Actual provider/host/desktop/daemon/runner acceptance for the selected adapter.",
+      "status": "not-run",
+      "evidence": "No live model, real desktop transaction, invitation, deployment or production data migration was performed by this functional baseline."
+    }
+  ],
+  "sources": [
+    {
+      "repo": "amplifier-bundle-harness-machine",
+      "commit": "12c97b58149218fbcbec9c0a0bdd64bb9d5c965e",
+      "paths": [
+        "skills/constraint-design/SKILL.md",
+        "skills/convergence-debugging/SKILL.md",
+        "skills/harness-reference/SKILL.md",
+        "agents",
+        "modules",
+        "context"
+      ],
+      "license": "MIT",
+      "role": "Primary retained owner history, mechanisms and records; portable method consolidates the listed entry points."
+    }
+  ],
+  "consolidation": [
+    "One portable method entry with mode references; original native engines, agents and records retained as optional adapters."
+  ],
+  "docs": [
+    "docs/CONSOLIDATION.md"
+  ]
+}

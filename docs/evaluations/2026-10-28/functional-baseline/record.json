@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-28",
+  "status": "local-functional-baseline",
+  "source_commit": "12c97b58149218fbcbec9c0a0bdd64bb9d5c965e",
+  "python": "3.12.5",
+  "fixture_content": "fictional",
+  "model_calls": 0,
+  "notes": "72 native gate/scaffold checks passed; provider-backed loop needs optional litellm and was not accepted.",
+  "limitations": [
+    "A skill alone does not enforce a sandbox or establish legal compliance."
+  ],
+  "files": {
+    "native.log": "f4fb1c862da63c268caf45f63bf1f378298f7e061b3e6364a00221dee0e52116",
+    "functional.log": "3d6dbe825db013ea0f2baffcd5f838a19f9b0d6bd9abecfc024fcbfa4edf4572"
+  }
+}

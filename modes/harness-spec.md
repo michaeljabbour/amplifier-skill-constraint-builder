@@ -45,7 +45,7 @@ Do NOT delegate spec creation until you have presented EACH section and the user
 
 ## The Process
 
-Before starting, check for relevant skills: `load_skill(search="harness")` and `load_skill(search="constraint")`.
+Before starting, check for relevant skills: `load_skill(skill_name="constraint-builder")` and `load_skill(search="constraint")`.
 
 ### Phase 0: Confirm Tier and Name
 

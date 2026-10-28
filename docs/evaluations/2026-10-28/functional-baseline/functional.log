@@ -1,0 +1,7 @@
+test_boundary_rejects_escape_and_preserves_legal_read (__main__.Gate.test_boundary_rejects_escape_and_preserves_legal_read) ... ok
+test_broken_checker_cannot_pass_as_true (__main__.Gate.test_broken_checker_cannot_pass_as_true) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.005s
+
+OK

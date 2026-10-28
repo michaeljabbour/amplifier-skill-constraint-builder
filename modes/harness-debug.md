@@ -21,7 +21,7 @@ mode:
 
 HARNESS-DEBUG MODE: Systematic debugging for harness-specific problems.
 
-Before investigating, check for relevant skills: `load_skill(skill_name="convergence-debugging")`.
+Before investigating, check for relevant skills: `load_skill(skill_name="constraint-builder")`.
 
 <CRITICAL>
 THE HYBRID PATTERN: You handle the INVESTIGATION. Agents handle the FIXES.
@@ -67,7 +67,7 @@ NO FIXES WITHOUT ROOT CAUSE INVESTIGATION FIRST.
 **Symptom:** Legal action rate flat for 10+ iterations. No improvement despite refinement.
 
 **Investigation:**
-1. Load convergence skill: `load_skill(skill_name="convergence-debugging")`
+1. Load convergence skill: `load_skill(skill_name="constraint-builder")`
 2. Examine iteration history — is the heuristic truly flat or oscillating?
 3. Check Thompson sampling state — are all arms being explored?
 4. Is the critic giving actionable feedback or repeating the same issues?
