@@ -1,0 +1,11 @@
+Your agent gets a file reader. It may read inside this project, never outside it.
+So you post a guard.
+It honks at everything. Nothing escapes. Nothing gets done either.
+Constraint Builder starts with cases, before any checker.
+A plain read walks in. A path that climbs out is refused.
+A link can look local and lead outside. Refused too.
+A missing file is an error, not an attack. No honk.
+Then the checker runs every case and counts both mistakes: blocked work, and escapes.
+Passing four cases is not a sandbox. Next, test it where the agent really acts.
+On screen: Block the escape. Keep the work.
+Constraint Builder. Give your agent a boundary it can actually test.

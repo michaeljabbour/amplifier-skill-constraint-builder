@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-28 — Film
+
+- Add a 71-second film to the site, with captions, a transcript, a poster and a 15-second cut. The example in it is fictional, and it reports no results.
+
 ## 2026-10-28 — Native guide entry paths
 
 - Replace a retained clone-directory mismatch or placeholder source with the canonical public entry.

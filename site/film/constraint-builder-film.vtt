@@ -1,0 +1,55 @@
+WEBVTT
+
+00:00:00.300 --> 00:00:02.290
+Your agent gets a file reader.
+
+00:00:02.600 --> 00:00:06.580
+It may read inside this project, never outside it.
+
+00:00:06.600 --> 00:00:08.270
+So you post a guard.
+
+00:00:09.360 --> 00:00:11.130
+It honks at everything.
+
+00:00:11.600 --> 00:00:12.550
+Nothing escapes.
+
+00:00:12.960 --> 00:00:14.440
+Nothing gets done either.
+
+00:00:16.780 --> 00:00:20.630
+Constraint Builder starts with cases, before any checker.
+
+00:00:20.940 --> 00:00:22.710
+A plain read walks in.
+
+00:00:22.860 --> 00:00:25.300
+A path that climbs out is refused.
+
+00:00:28.520 --> 00:00:31.210
+A link can look local and lead outside.
+
+00:00:31.580 --> 00:00:32.510
+Refused too.
+
+00:00:35.200 --> 00:00:38.650
+A missing file is an error, not an attack.
+
+00:00:38.940 --> 00:00:39.770
+No honk.
+
+00:00:40.030 --> 00:00:46.190
+Then the checker runs every case and counts both mistakes: blocked work, and escapes.
+
+00:00:48.740 --> 00:00:51.330
+Passing four cases is not a sandbox.
+
+00:00:51.900 --> 00:00:55.420
+Next, test it where the agent really acts.
+
+00:01:03.780 --> 00:01:04.750
+Constraint Builder.
+
+00:01:05.120 --> 00:01:08.080
+Give your agent a boundary it can actually test.

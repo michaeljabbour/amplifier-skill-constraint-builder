@@ -131,5 +131,12 @@
     "proof_summary": "Local gate and scaffold tests exercise legal actions, illegal actions and failure paths. The provider-backed refinement loop and deployment into a real dispatch boundary require separate acceptance.",
     "next_step": "Start with one action boundary and an explicit list of cases the checker must distinguish."
   },
-  "repository_url": "https://github.com/michaeljabbour/amplifier-skill-constraint-builder"
+  "repository_url": "https://github.com/michaeljabbour/amplifier-skill-constraint-builder",
+  "film": {
+    "file": "constraint-builder-film",
+    "seconds": 71,
+    "heading": "The goose at the gate.",
+    "blurb": "In 71 seconds, a guard goose honks at every request: nothing escapes, and nothing gets done. Constraint Builder starts with cases before any checker: a plain read is allowed, a path that climbs out is refused, a link that looks local but leads outside is refused, and a missing file is an error, not an attack. The checker counts both mistakes, blocked work and escapes. Captions are on the player; a transcript is below.",
+    "note": "The file tool, the cases and the results are a fictional example. Passing supplied cases does not prove unseen safety; the film shows how the skill behaves and reports no results."
+  }
 }

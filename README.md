@@ -2,6 +2,8 @@
 
 Give your agent a boundary it can actually test.
 
+Watch the [71-second film](https://michaeljabbour.github.io/amplifier-skill-constraint-builder/#film): a guard that blocks everything, and the test cases that let honest work through while counting every escape. The example in it is fictional.
+
 For developers building agent tools. Turn “the agent may do this, but never that” into an action specification, a checker and examples that show whether useful work is still possible.
 
 [Explore the site](https://michaeljabbour.github.io/amplifier-skill-constraint-builder/)
