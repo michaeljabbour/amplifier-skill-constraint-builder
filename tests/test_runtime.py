@@ -10,6 +10,19 @@ import asyncio
 import os
 import sys
 from unittest.mock import MagicMock
+from types import ModuleType
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def mocked_optional_litellm(monkeypatch):
+    """Unit tests mock the SDK surface; they never require or call a provider."""
+    module = ModuleType("litellm")
+    async def refuse_unmocked_completion(**kwargs):
+        raise AssertionError("A runtime unit test attempted an unmocked completion")
+    module.acompletion = refuse_unmocked_completion
+    monkeypatch.setitem(sys.modules, "litellm", module)
 
 # Add runtime/pico to path (pico tier replaced the flat runtime files)
 _RUNTIME_DIR = os.path.join(

@@ -34,6 +34,11 @@ Try this first task:
 - The portable skill and local checker use Python 3. No model key is needed to install or inspect them.
 - The checker evaluates trusted candidate Python locally; it is not an isolation boundary for hostile code.
 - The original Pico, Nano, Micro and provider-backed refinement engines are optional.
+- Their shell tool executes trusted caller commands with the process's permissions;
+  `project_root` is a working directory, not an OS jail. The optional container
+  exposes its provider credentials and network to every contained process. See
+  [runtime and credential boundaries](docs/RUNTIME-BOUNDARIES.md), including the
+  provider-only key file and explicit host publication step.
 
 ## Evidence and limits
 

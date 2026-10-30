@@ -14,3 +14,4 @@ __pycache__/
 docs/support/
 
 _site/
+.research/

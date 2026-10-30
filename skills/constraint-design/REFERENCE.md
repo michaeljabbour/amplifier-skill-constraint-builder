@@ -49,6 +49,8 @@ Examples:
 - `is_legal_action()` returning False → agent must retry
 - Hook `modify` to sanitize parameters before execution
 
+A hard guarantee requires a tested enforcement boundary covering every execution route. A prompt rule, preset working directory, or read-only credential/socket mount alone is not OS isolation. The optional runtime shell tools execute trusted caller programs with the process's permissions; their `project_root` is not a jail.
+
 **What enforcement constraints are good at:**
 - Safety-critical rules that must not be violated
 - Rules that can be evaluated deterministically (not ambiguously)

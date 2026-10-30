@@ -171,3 +171,5 @@ from the AutoHarness paper and the dev-machine lineage. Do not change these patt
 Domain-specific artifacts (harness spec, environment descriptions, evaluation code)
 are created during the interactive pipeline phases (`/harness-explore`, `/harness-spec`,
 `/harness-plan`), not from these templates.
+
+Host monitor/watchdog scripts infer their project root from `<project>/scripts` at runtime, or accept `HARNESS_MACHINE_PROJECT_DIR` as environment data. They verify that root against Git and query container/image identity from Compose; do not render project paths into their shell/Python source. Docker Go-format tokens remain unchanged.

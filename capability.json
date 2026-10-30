@@ -76,12 +76,13 @@
     "One portable method entry with mode references; original native engines, agents and records retained as optional adapters."
   ],
   "docs": [
-    "docs/CONSOLIDATION.md"
+    "docs/CONSOLIDATION.md",
+    "docs/RUNTIME-BOUNDARIES.md"
   ],
   "publication_status": "Installation and evidence scopes are documented below.",
   "marketing": {
     "headline": "Give your agent a boundary it can actually test.",
-    "lead": "For developers building agent tools. Turn “the agent may do this, but never that” into an action specification, a checker and examples that show whether useful work is still possible.",
+    "lead": "For developers building agent tools. Turn \u201cthe agent may do this, but never that\u201d into an action specification, a checker and examples that show whether useful work is still possible.",
     "benefits": [
       {
         "title": "Catch an escaped action",
@@ -131,12 +132,92 @@
     "proof_summary": "Local gate and scaffold tests exercise legal actions, illegal actions and failure paths. The provider-backed refinement loop and deployment into a real dispatch boundary require separate acceptance.",
     "next_step": "Start with one action boundary and an explicit list of cases the checker must distinguish."
   },
-  "repository_url": "https://github.com/michaeljabbour/amplifier-skill-constraint-builder",
+  "repository_url": "https://github.com/michaeljabbour/amplifier-capability-constraint-builder",
+  "name": "amplifier-capability-constraint-builder",
+  "legacy_names": [
+    "amplifier-skill-constraint-builder",
+    "constraint-builder",
+    "constraint-design",
+    "convergence-debugging",
+    "harness-reference"
+  ],
+  "contract_version": "amplifier-capability/v1",
+  "version": null,
+  "version_basis": "No release version recorded; installer requires a full Git revision pin.",
+  "engine": "LLM",
+  "engine_components": {
+    "caller_method": "LLM"
+  },
+  "surfaces": [
+    "agent-skills",
+    "amplifier-bundle"
+  ],
+  "portable_method": {
+    "name": "constraint-builder",
+    "path": "skills/constraint-builder",
+    "include": [
+      "."
+    ],
+    "contract": "Agent Skills directory; caller applies the method; no independent execution loop is installed."
+  },
+  "interfaces": {
+    "portable": {
+      "input": "Caller task and explicitly authorized context",
+      "output": "Turn an action boundary into a testable constraint harness, with legal actions still possible.",
+      "failure": "Report insufficient evidence, unsupported context or host limitation; never turn discovery into an execution claim."
+    },
+    "native": {
+      "distribution": null,
+      "entrypoints": {},
+      "docs": [
+        "docs/CONSOLIDATION.md"
+      ],
+      "status": "Existing declared entrypoints preserved; runtime signatures, service access and installation tests remain separate evidence."
+    },
+    "host_adapters": {
+      "amplifier_bundle": "bundle.md",
+      "grants_autonomy": false
+    }
+  },
+  "permissions": {
+    "installation": {
+      "network": false,
+      "executes_capability_code": false,
+      "writes": [
+        "Selected discovery folders",
+        ".capability-state transaction backups"
+      ],
+      "grants_runtime_permissions": false
+    },
+    "runtime": {
+      "status": "Host/caller authorizes each operation; installation is not a tool allowlist or standing approval.",
+      "declared_boundaries": [
+        "A skill alone does not enforce a sandbox or establish legal compliance."
+      ]
+    },
+    "secret_names": {
+      "discovery_requires": [],
+      "native_runtime_inventory": "See native documentation; no credentials are bundled or inferred."
+    }
+  },
+  "dataflow": {
+    "installation": "Read pinned tracked portable source and copy locally with SHA-256 receipts. No source text is transmitted.",
+    "method": "Caller supplies authorized context; existing promise and boundaries govern output.",
+    "native_runtime": "Provider/network/storage flows are owned by native interfaces and host authorization; these files do not enable them."
+  },
+  "source_policy": {
+    "revision": "Explicit full40-character Git commit required at installation; never infer latest.",
+    "repository_rename": "Public identity may change; skill folder, imports, entrypoints, tool IDs and schemas remain stable.",
+    "research": ".research/market remains local and ignored; AGENTS governs refresh."
+  },
   "film": {
     "file": "constraint-builder-film",
     "seconds": 71,
     "heading": "The goose at the gate.",
     "blurb": "In 71 seconds, a guard goose honks at every request: nothing escapes, and nothing gets done. Constraint Builder starts with cases before any checker: a plain read is allowed, a path that climbs out is refused, a link that looks local but leads outside is refused, and a missing file is an error, not an attack. The checker counts both mistakes, blocked work and escapes. Captions are on the player; a transcript is below.",
     "note": "The file tool, the cases and the results are a fictional example. Passing supplied cases does not prove unseen safety; the film shows how the skill behaves and reports no results."
-  }
+  },
+  "repository_aliases": [
+    "https://github.com/michaeljabbour/amplifier-skill-constraint-builder"
+  ]
 }

@@ -1,12 +1,10 @@
-"""Local tool executor for pico runtime.
+"""Local tool executor for the micro runtime.
 
-Provides 7 tools, each independently enforcing the project_root boundary:
-    read_file, write_file, edit_file, apply_patch, bash, grep, glob
-
-Every path-accepting method resolves and validates against project_root
-(defense-in-depth — even if the constraint gate is bypassed, the executor
-still enforces the boundary and raises PermissionError for out-of-boundary
-access).
+Explicit file-tool path arguments are resolved against project_root. The bash
+method intentionally executes trusted caller shell commands with project_root
+as cwd; the separate constraint gate must mediate dispatch. It does not contain the command's paths, subprocesses, network
+or inherited credentials. A working directory is not an OS sandbox. Deploy an
+independent tested boundary before running untrusted commands or checker code.
 
 Dependencies: stdlib only (subprocess, pathlib, os, re).
 """
@@ -22,9 +20,9 @@ from pathlib import Path
 class LocalToolExecutor:
     """Executes tools within a project_root boundary.
 
-    Every path-accepting method resolves the path against project_root and
-    rejects any resolved path that falls outside it.  This is defense-in-depth:
-    even if the constraint gate is bypassed, tools still enforce boundaries.
+    Explicit file-tool path arguments reject resolved paths outside the root.
+    bash(command) is a trusted-code interface with ordinary process privileges;
+    setting cwd does not constrain the shell program to that directory.
 
     Usage::
 
@@ -197,7 +195,8 @@ class LocalToolExecutor:
     def bash(self, command: str, timeout: int = 30) -> str:
         """Execute a bash command in the project root.
 
-        Uses subprocess.run under the hood.
+        Uses subprocess.run with shell=True. This is deliberate execution of
+        trusted caller code, not a filesystem or credential isolation boundary.
 
         Args:
             command: Shell command string.

@@ -14,3 +14,11 @@
 - Lead with the intended user, concrete benefits, a fictional output preview and a first task.
 - Document canonical public clone/install steps, optional runtime requirements and the boundary of existing verification.
 - Preserve native interfaces, source history and the retained integration guide.
+
+## 2026-10-30 — upgrade and execution boundaries
+
+- Pass upgrade paths and generated reports as environment data; preserve the actual unique backup receipt, validate source before writes, and fail nonzero on invalid upgrades.
+- Remove default SSH forwarding and implicit monitor publication; require an explicit provider-only key file and owner-reviewed host publication. Keep existing container hardening.
+- Document trusted shell execution, shared container credentials/network and live deployment acceptance limits.
+
+- Harden host monitor/watchdog project identity and state/path handling, remove shell eval, verify restart outcomes, and reject symlinked control outputs.

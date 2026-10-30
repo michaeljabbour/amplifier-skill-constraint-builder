@@ -133,18 +133,26 @@ def _make_handler(
         tool_name = data.get("tool_name")
         parameters = data.get("parameters") or {}
 
+        check_failed = False
         try:
             if tool_name is None:
                 raise ValueError("tool_name is None — invalid tool call")
             if signature_name == "is_legal_action":
-                is_legal, reason = constraint_fn(tool_name, parameters)
+                result = constraint_fn(tool_name, parameters)
             else:
                 # validate_action(state, action) signature
                 state = {"project_root": project_root}
                 action = {"tool_name": tool_name, "parameters": parameters}
-                is_legal, reason = constraint_fn(state, action)
+                result = constraint_fn(state, action)
+            if (not isinstance(result, tuple) or len(result) != 2
+                    or type(result[0]) is not bool or not isinstance(result[1], str)):
+                raise TypeError(
+                    "Constraint returned an invalid result; expected (bool, reason)"
+                )
+            is_legal, reason = result
         except Exception as exc:
-            # Fail-closed: exceptions are treated as deny
+            # A broken checker is a hard deny even in advisory/warn mode.
+            check_failed = True
             is_legal = False
             reason = f"Constraint check raised an exception: {exc}"
 
@@ -160,7 +168,7 @@ def _make_handler(
             f"</constraint-violation>"
         )
 
-        if strict:
+        if strict or check_failed:
             return HookResult(
                 action="deny",
                 reason=f"Constraint violation: {reason}",
@@ -175,7 +183,7 @@ def _make_handler(
                 context_injection_role="system",
                 ephemeral=True,
                 user_message=f"⚠️ Constraint warning: {reason}",
-                user_message_level="warn",
+                user_message_level="warning",
             )
 
     return handler

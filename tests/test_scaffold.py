@@ -6,7 +6,7 @@ Validates:
 - All 8 mode files exist with correct structure
 - All 11 agent files exist with correct structure
 - All 6 recipe files exist and parse as valid YAML
-- All 3 skills have SKILL.md files
+- The canonical skill has SKILL.md and the three legacy reference guides remain
 - Context files exist
 - Template files exist
 - Required directories exist
@@ -358,13 +358,17 @@ class TestRecipes:
 # ---------------------------------------------------------------------------
 
 ALL_SKILLS = [
-    "harness-reference",
-    "constraint-design",
-    "convergence-debugging",
+    "constraint-builder",
 ]
 
 
 class TestSkills:
+    @pytest.mark.parametrize("reference", ["harness-reference", "constraint-design", "convergence-debugging"])
+    def test_legacy_reference_guide_is_preserved(self, reference):
+        path = os.path.join(BUNDLE_ROOT, "skills", reference, "REFERENCE.md")
+        assert os.path.isfile(path)
+        assert os.path.getsize(path) > 0
+
     @pytest.mark.parametrize("skill_name", ALL_SKILLS)
     def test_skill_directory_exists(self, skill_name):
         path = os.path.join(BUNDLE_ROOT, "skills", skill_name)

@@ -6,33 +6,56 @@
 # Checks:
 #   1. Container is running
 #   2. Container isn't stuck (CPU = 0% for too long with no new commits)
-#   3. SSH agent is alive (needed for push step)
-#   4. No zombie/crashed state
+#   3. No zombie/crashed state
 #
 # Actions:
 #   - Restarts container if unhealthy
-#   - Restarts SSH agent if socket is dead
 #   - Logs everything to harness-machine-watchdog.log
 #
 # Run via cron every 15 minutes:
 #   */15 * * * * /path/to/harness-machine-watchdog.sh
 # =============================================================================
-PROJECT_DIR="{{project_dir}}"
+# Project paths are runtime data, never generated shell source. These scripts
+# live in <project>/scripts; an explicit override may select another project.
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)" || exit 1
+PROJECT_DIR="${HARNESS_MACHINE_PROJECT_DIR:-$(dirname -- "$SCRIPT_DIR")}"
+if ! cd -- "$PROJECT_DIR"; then
+    printf 'FATAL: cannot enter project directory: %s\n' "$PROJECT_DIR" >&2
+    exit 1
+fi
+PROJECT_DIR="$(pwd -P)" || exit 1
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR
+GIT_ROOT="$(git -C "$PROJECT_DIR" rev-parse --show-toplevel 2>/dev/null)" || {
+    printf 'FATAL: project is not a Git worktree: %s\n' "$PROJECT_DIR" >&2
+    exit 1
+}
+if [ "$GIT_ROOT" != "$PROJECT_DIR" ]; then
+    printf 'FATAL: project must be the Git worktree root: %s\n' "$PROJECT_DIR" >&2
+    exit 1
+fi
 COMPOSE_FILE="$PROJECT_DIR/docker-compose.harness-machine.yaml"
+CONTAINER="$(docker compose -f "$COMPOSE_FILE" ps --all --quiet harness-machine)" || exit 1
+IMAGE_NAME="$(docker compose -f "$COMPOSE_FILE" images --quiet harness-machine)" || exit 1
 LOG_FILE="$PROJECT_DIR/harness-machine-watchdog.log"
 COMMIT_MARKER="$PROJECT_DIR/.watchdog-last-commit"
 HEARTBEAT_FILE="$PROJECT_DIR/.harness-machine-heartbeat"
-HEARTBEAT_MAX_AGE=3600   # 60 min -- entrypoint is alive if heartbeat is fresher
-
-cd "$PROJECT_DIR" || exit 1
+HEARTBEAT_MAX_AGE=3600
+for control in "$LOG_FILE" "$LOG_FILE.tmp" "$COMMIT_MARKER" "$PROJECT_DIR/.watchdog-zero-count"; do
+    if [ -L "$control" ]; then
+        printf 'FATAL: control files must not be symlinks: %s\n' "$control" >&2
+        exit 1
+    fi
+done
 
 # -- Self-heal log ownership (the #1 silent-failure mode) ----------------------
 # Docker can create this file as root. If cron can't write to it, every
 # subsequent log() call silently fails and the watchdog appears dead.
 if [ -f "$LOG_FILE" ] && [ ! -w "$LOG_FILE" ]; then
-    docker run --rm -v "$PROJECT_DIR:$PROJECT_DIR" -w "$PROJECT_DIR" \
-        --entrypoint bash "{{image_name}}" \
-        -c "chown $(id -u):$(id -g) $LOG_FILE" 2>/dev/null || true
+    if ! docker run --rm -v "$PROJECT_DIR:$PROJECT_DIR" -w "$PROJECT_DIR" \
+        --entrypoint chown "$IMAGE_NAME" -- "$(id -u):$(id -g)" "$LOG_FILE"; then
+        printf 'FATAL: watchdog log ownership repair failed\n' >&2
+        exit 1
+    fi
 fi
 touch "$LOG_FILE" 2>/dev/null || { echo "FATAL: cannot write to $LOG_FILE" >&2; exit 1; }
 
@@ -43,50 +66,46 @@ if [ -f "$LOG_FILE" ] && [ "$(wc -l < "$LOG_FILE")" -gt 500 ]; then
 fi
 
 log() {
-    echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] $*" >> "$LOG_FILE"
+    printf '[%s] %s\n' "$(date -u '+%Y-%m-%d %H:%M:%S UTC')" "$*" >> "$LOG_FILE"
 }
 
 log "--- watchdog check start ---"
 
 # ── 1. Is the container running? ─────────────────────────────────────────────
-CONTAINER_STATUS=$(docker compose -f "$COMPOSE_FILE" ps --format json 2>/dev/null | python3 -c "
-import sys, json
-try:
-    data = json.loads(sys.stdin.read())
-    # docker compose v2 returns a single object or list
-    if isinstance(data, list):
-        data = data[0] if data else {}
-    print(data.get('State', 'unknown'))
-except:
-    print('unknown')
-" 2>/dev/null || echo "unknown")
+container_state() {
+    local payload
+    payload="$(docker compose -f "$COMPOSE_FILE" ps --format json)" || return 1
+    printf '%s' "$payload" | python3 -c 'import json,sys; data=json.load(sys.stdin); data=data[0] if isinstance(data,list) and data else data; print(data.get("State","missing") if isinstance(data,dict) else "missing")'
+}
+restart_container() {
+    if ! docker compose -f "$COMPOSE_FILE" down 2>> "$LOG_FILE"; then
+        log "ERROR: container stop failed"
+        return 1
+    fi
+    if ! docker compose -f "$COMPOSE_FILE" up -d harness-machine 2>> "$LOG_FILE"; then
+        log "ERROR: container startup failed"
+        return 1
+    fi
+    local state
+    state="$(container_state)" || return 1
+    if [ "$state" != "running" ]; then
+        log "ERROR: container did not reach running state: $state"
+        return 1
+    fi
+    log "Container restarted and running"
+}
+CONTAINER_STATUS="$(container_state)" || { log "ERROR: container state query failed"; exit 1; }
 
 if [ "$CONTAINER_STATUS" != "running" ]; then
     log "RESTART: container not running (state: $CONTAINER_STATUS)"
-    docker compose -f "$COMPOSE_FILE" down 2>/dev/null || true
-    docker compose -f "$COMPOSE_FILE" up -d harness-machine 2>> "$LOG_FILE"
-    log "Container restarted"
+    restart_container || exit 1
     exit 0
 fi
 
 log "Container is running"
 
-# ── 2. Is the SSH agent alive? (needed for git push step) ────────────────────
-if [ -z "${SSH_AUTH_SOCK:-}" ] || [ ! -S "${SSH_AUTH_SOCK:-/nonexistent}" ]; then
-    log "WARN: SSH_AUTH_SOCK not set or socket missing ($SSH_AUTH_SOCK)"
-    log "  Push step will fail gracefully until agent is restored"
-    # Don't restart -- the container works fine, just push is degraded
-else
-    AGENT_OK=$(ssh-add -l 2>/dev/null && echo "yes" || echo "no")
-    if [ "$AGENT_OK" = "no" ]; then
-        log "WARN: SSH agent socket exists but has no keys loaded"
-    else
-        log "SSH agent healthy"
-    fi
-fi
-
-# ── 3. Is the container making progress? ─────────────────────────────────────
-CURRENT_HEAD=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+# ── 2. Is the container making progress? ─────────────────────────────────────
+CURRENT_HEAD=$(git -C "$PROJECT_DIR" rev-parse HEAD 2>/dev/null || echo "unknown")
 LAST_KNOWN=""
 if [ -f "$COMMIT_MARKER" ]; then
     LAST_KNOWN=$(cat "$COMMIT_MARKER")
@@ -98,7 +117,7 @@ if [ "$CURRENT_HEAD" != "$LAST_KNOWN" ]; then
 else
     # HEAD hasn't moved since last check -- is the container actually working?
     # NOTE: {{.CPUPerc}}, {{.MemUsage}} are Docker Go template strings -- NOT machine template variables.
-    CPU=$(docker stats --no-stream --format '{{.CPUPerc}}' {{container_name}} 2>/dev/null | tr -d '%' || echo "0")
+    CPU=$(docker stats --no-stream --format '{{.CPUPerc}}' "$CONTAINER" 2>/dev/null | tr -d '%' || echo "0")
     # Truncate to integer for comparison
     CPU_INT=${CPU%%.*}
     CPU_INT=${CPU_INT:-0}
@@ -110,7 +129,11 @@ else
         if [ -f "$ZERO_FILE" ]; then
             ZERO_COUNT=$(cat "$ZERO_FILE")
         fi
-        ZERO_COUNT=$((ZERO_COUNT + 1))
+        if ! [[ "$ZERO_COUNT" =~ ^[0-9]+$ ]]; then
+            log "ERROR: invalid watchdog counter"
+            exit 1
+        fi
+        ZERO_COUNT=$((10#$ZERO_COUNT + 1))
         echo "$ZERO_COUNT" > "$ZERO_FILE"
 
         if [ "$ZERO_COUNT" -ge 4 ]; then
@@ -134,11 +157,8 @@ else
 
             if [ "$heartbeat_stale" = true ]; then
                 log "RESTART: container idle for $ZERO_COUNT consecutive checks (${ZERO_COUNT}x15min) with no new commits (heartbeat stale or missing)"
-                docker compose -f "$COMPOSE_FILE" down 2>> "$LOG_FILE"
-                sleep 5
-                docker compose -f "$COMPOSE_FILE" up -d harness-machine 2>> "$LOG_FILE"
+                restart_container || exit 1
                 echo "0" > "$ZERO_FILE"
-                log "Container restarted after idle detection"
             fi
             # If heartbeat is fresh: don't restart, don't reset ZERO_COUNT.
             # This way, if the heartbeat DOES go stale, restart triggers
@@ -155,10 +175,10 @@ fi
 
 # ── 4. Log summary stats ──────────────────────────────────────────────────────
 # NOTE: {{.MemUsage}} is a Docker Go template string -- NOT a machine template variable.
-MEM=$(docker stats --no-stream --format '{{.MemUsage}}' {{container_name}} 2>/dev/null || echo "unknown")
-UPSTREAM=$(git rev-parse --abbrev-ref '@{u}' 2>/dev/null || echo "")
+MEM=$(docker stats --no-stream --format '{{.MemUsage}}' "$CONTAINER" 2>/dev/null || echo "unknown")
+UPSTREAM=$(git -C "$PROJECT_DIR" rev-parse --abbrev-ref '@{u}' 2>/dev/null || echo "")
 if [ -n "$UPSTREAM" ]; then
-    UNPUSHED=$(git rev-list --count "$UPSTREAM"..HEAD 2>/dev/null || echo "?")
+    UNPUSHED=$(git -C "$PROJECT_DIR" rev-list --count "$UPSTREAM"..HEAD 2>/dev/null || echo "?")
 else
     UNPUSHED="?(no upstream)"
 fi

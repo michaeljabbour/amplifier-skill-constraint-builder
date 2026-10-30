@@ -5,100 +5,132 @@
 # Runs every 10 minutes via cron. Detects failure patterns, auto-remediates
 # common issues (permission healing, orphaned work, stale STATE.yaml),
 # and logs results.
-# NOTE: No set -euo pipefail — a monitor that dies on errors is worse than useless.
-# All errors are handled explicitly with || true and 2>/dev/null guards.
+# Critical project, state and mutation failures exit nonzero. Optional diagnostic
+# failures are reported as unknown; they do not imply successful repair.
 #
 # Run via cron every 10 minutes:
 #   */10 * * * * /path/to/harness-machine-monitor.sh
 # =============================================================================
 
-PROJECT_DIR="{{project_dir}}"
-MONITOR_LOG="$PROJECT_DIR/harness-machine-monitor.log"
-CONTAINER="{{container_name}}"
-IMAGE_NAME="{{image_name}}"
-MAX_LOG_LINES=500
-
-log() {
-    echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] $*" >> "$MONITOR_LOG"
+# Project paths are runtime data, never generated shell source. These scripts
+# live in <project>/scripts; an explicit override may select another project.
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)" || exit 1
+PROJECT_DIR="${HARNESS_MACHINE_PROJECT_DIR:-$(dirname -- "$SCRIPT_DIR")}"
+if ! cd -- "$PROJECT_DIR"; then
+    printf 'FATAL: cannot enter project directory: %s\n' "$PROJECT_DIR" >&2
+    exit 1
+fi
+PROJECT_DIR="$(pwd -P)" || exit 1
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR
+GIT_ROOT="$(git -C "$PROJECT_DIR" rev-parse --show-toplevel 2>/dev/null)" || {
+    printf 'FATAL: project is not a Git worktree: %s\n' "$PROJECT_DIR" >&2
+    exit 1
 }
-
-# -- Log rotation --------------------------------------------------------------
-if [ -f "$MONITOR_LOG" ] && [ "$(wc -l < "$MONITOR_LOG")" -gt "$MAX_LOG_LINES" ]; then
-    tail -200 "$MONITOR_LOG" > "$MONITOR_LOG.tmp"
-    mv "$MONITOR_LOG.tmp" "$MONITOR_LOG"
+if [ "$GIT_ROOT" != "$PROJECT_DIR" ]; then
+    printf 'FATAL: project must be the Git worktree root: %s\n' "$PROJECT_DIR" >&2
+    exit 1
 fi
-
-log "--- monitor check ---"
-
-# -- Permission self-healing ---------------------------------------------------
-# Docker can create files owned by the container user. Fix ownership so the host
-# cron user can operate on these files. Uses the container image to chown (it
-# has the right perms to write those files in the first place).
-
-# Heal monitor log
+COMPOSE_FILE="$PROJECT_DIR/docker-compose.harness-machine.yaml"
+CONTAINER="$(docker compose -f "$COMPOSE_FILE" ps --all --quiet harness-machine)" || exit 1
+IMAGE_NAME="$(docker compose -f "$COMPOSE_FILE" images --quiet harness-machine)" || exit 1
+MONITOR_LOG="$PROJECT_DIR/harness-machine-monitor.log"
+STATE_FILE="$PROJECT_DIR/STATE.yaml"
+MAX_LOG_LINES=500
+for control in "$STATE_FILE" "$MONITOR_LOG" "$MONITOR_LOG.tmp" "$PROJECT_DIR/.monitor-last-head"; do
+    if [ -L "$control" ]; then
+        printf 'FATAL: control files must not be symlinks: %s\n' "$control" >&2
+        exit 1
+    fi
+done
 if [ -f "$MONITOR_LOG" ] && [ ! -w "$MONITOR_LOG" ]; then
-    docker run --rm -v "$PROJECT_DIR:$PROJECT_DIR" -w "$PROJECT_DIR" \
-        --entrypoint bash "$IMAGE_NAME" \
-        -c "chown $(id -u):$(id -g) $MONITOR_LOG" 2>/dev/null || true
-    log "HEALED: monitor log ownership"
+    if ! docker run --rm -v "$PROJECT_DIR:$PROJECT_DIR" -w "$PROJECT_DIR" \
+        --entrypoint chown "$IMAGE_NAME" -- "$(id -u):$(id -g)" "$MONITOR_LOG"; then
+        printf 'FATAL: monitor log ownership repair failed\n' >&2
+        exit 1
+    fi
 fi
+touch -- "$MONITOR_LOG" || exit 1
+log() {
+    printf '[%s] %s\n' "$(date -u '+%Y-%m-%d %H:%M:%S UTC')" "$*" >> "$MONITOR_LOG"
+}
+if [ "$(wc -l < "$MONITOR_LOG")" -gt "$MAX_LOG_LINES" ]; then
+    tail -200 "$MONITOR_LOG" > "$MONITOR_LOG.tmp" && mv -- "$MONITOR_LOG.tmp" "$MONITOR_LOG" || exit 1
+fi
+log "--- monitor check start ---"
 
 # Heal .git/objects (Docker commits can create root-owned objects)
 ROOT_OBJECTS=$(find "$PROJECT_DIR/.git/objects" -not -user "$(whoami)" 2>/dev/null | head -1)
 if [ -n "$ROOT_OBJECTS" ]; then
-    docker run --rm -v "$PROJECT_DIR:$PROJECT_DIR" -w "$PROJECT_DIR" \
-        --entrypoint bash "$IMAGE_NAME" \
-        -c "chown -R $(id -u):$(id -g) .git/" 2>/dev/null || true
-    log "HEALED: .git ownership"
+    if docker run --rm -v "$PROJECT_DIR:$PROJECT_DIR" -w "$PROJECT_DIR" \
+        --entrypoint chown "$IMAGE_NAME" -R -- "$(id -u):$(id -g)" "$PROJECT_DIR/.git"; then
+        log "HEALED: .git ownership"
+    else
+        log "ERROR: .git ownership repair failed"
+        exit 1
+    fi
 fi
 
 # -- Container status ----------------------------------------------------------
 # NOTE: {{.State.Status}} is a Docker Go template string -- NOT a machine template variable.
-container_status=$(docker inspect -f '{{.State.Status}}' "$CONTAINER" 2>/dev/null || echo "missing")
+container_status="missing"
+if [ -n "$CONTAINER" ]; then
+    container_status=$(docker inspect -f '{{.State.Status}}' "$CONTAINER") || {
+        log "ERROR: container state query failed"
+        exit 1
+    }
+fi
 
 # -- Auto-commit orphaned work -------------------------------------------------
 # If the container stopped with uncommitted changes, save the work before we
 # potentially exit. This prevents data loss on crash/restart cycles.
-cd "$PROJECT_DIR" 2>/dev/null || true
-DIRTY=$(git status --porcelain 2>/dev/null | head -1)
+DIRTY=$(git -C "$PROJECT_DIR" status --porcelain) || {
+    log "ERROR: Git status failed"
+    exit 1
+}
 if [ -n "$DIRTY" ] && [ "$container_status" != "running" ]; then
     # Heal source file ownership first so git can stage everything
     for dir in .harness-machine harnesses src docs; do
         if [ -d "$PROJECT_DIR/$dir" ]; then
             ROOT_SRC=$(find "$PROJECT_DIR/$dir" -not -user "$(whoami)" 2>/dev/null | head -1)
             if [ -n "$ROOT_SRC" ]; then
-                docker run --rm -v "$PROJECT_DIR:$PROJECT_DIR" -w "$PROJECT_DIR" \
-                    --entrypoint bash "$IMAGE_NAME" \
-                    -c "chown -R $(id -u):$(id -g) $dir/" 2>/dev/null || true
+                if ! docker run --rm -v "$PROJECT_DIR:$PROJECT_DIR" -w "$PROJECT_DIR" \
+                    --entrypoint chown "$IMAGE_NAME" -R -- "$(id -u):$(id -g)" "$PROJECT_DIR/$dir"; then
+                    log "ERROR: source ownership repair failed"
+                    exit 1
+                fi
             fi
         fi
     done
-    git add -A 2>/dev/null || true
-    git commit -m "chore: auto-save orphaned harness work (monitor recovery)" 2>/dev/null || true
-    log "AUTO-COMMIT: saved orphaned work from stopped container"
+    if git -C "$PROJECT_DIR" add -A && git -C "$PROJECT_DIR" commit -m "chore: auto-save orphaned harness work (monitor recovery)"; then
+        log "AUTO-COMMIT: saved orphaned work from stopped container"
+    else
+        log "ERROR: saving orphaned work failed"
+        exit 1
+    fi
 fi
 
 # -- STATE.yaml-aware status ---------------------------------------------------
 # Parse STATE.yaml for environment progress and blocker counts. Also resets any
 # environments stuck in 'in-progress' when the container is down (stale state).
 if [ -f "$PROJECT_DIR/STATE.yaml" ]; then
-    _state_vars=$(python3 -c "
-import yaml, sys
-try:
-    state = yaml.safe_load(open('$PROJECT_DIR/STATE.yaml'))
-    environments = state.get('environments', {})
-    remaining = sum(1 for e in environments.values() if isinstance(e, dict) and e.get('status') in ('ready', 'in-progress', 'blocked'))
-    blockers = len(state.get('blockers', []))
-    in_progress = [k for k, v in environments.items() if isinstance(v, dict) and v.get('status') == 'in-progress']
-    print('REMAINING=' + str(remaining))
-    print('BLOCKERS=' + str(blockers))
-    print('IN_PROGRESS=' + str(len(in_progress)))
-except Exception:
-    print('REMAINING=?')
-    print('BLOCKERS=?')
-    print('IN_PROGRESS=?')
-" 2>/dev/null) || true
-    eval "${_state_vars:-REMAINING=?}" 2>/dev/null || true
+    if ! _state_vars=$(python3 - "$STATE_FILE" 2>> "$MONITOR_LOG" <<'PY'
+import sys, yaml
+state = yaml.safe_load(open(sys.argv[1]))
+if not isinstance(state, dict):
+    raise ValueError('STATE.yaml must contain a mapping')
+environments = state.get('environments') or {}
+if not isinstance(environments, dict):
+    raise ValueError('STATE.yaml environments must contain a mapping')
+remaining = sum(1 for value in environments.values() if isinstance(value, dict) and value.get('status') in ('ready', 'in-progress', 'blocked'))
+blockers = len(state.get('blockers') or []) + sum(len(value.get('blockers') or []) for value in environments.values() if isinstance(value, dict))
+in_progress = sum(1 for value in environments.values() if isinstance(value, dict) and value.get('status') == 'in-progress')
+print(str(remaining) + '\t' + str(blockers) + '\t' + str(in_progress))
+PY
+    ); then
+        log "ERROR: STATE.yaml parsing failed"
+        exit 1
+    fi
+    IFS=$'\t' read -r REMAINING BLOCKERS IN_PROGRESS <<< "$_state_vars"
     REMAINING="${REMAINING:-?}"
     BLOCKERS="${BLOCKERS:-?}"
     IN_PROGRESS="${IN_PROGRESS:-?}"
@@ -106,46 +138,51 @@ except Exception:
 
     # Reset stale in-progress environments if the container is down
     if [ "$container_status" != "running" ] && [ "$IN_PROGRESS" != "?" ] && [ "$IN_PROGRESS" -gt 0 ] 2>/dev/null; then
-        python3 -c "
-import yaml
-state = yaml.safe_load(open('$PROJECT_DIR/STATE.yaml'))
-changed = False
-for k, v in state.get('environments', {}).items():
-    if isinstance(v, dict) and v.get('status') == 'in-progress':
-        v['status'] = 'ready'
-        changed = True
+        if _reset_count=$(python3 - "$STATE_FILE" 2>> "$MONITOR_LOG" <<'PY'
+import sys, yaml
+path = sys.argv[1]
+state = yaml.safe_load(open(path))
+changed = 0
+for value in (state.get('environments') or {}).values():
+    if isinstance(value, dict) and value.get('status') == 'in-progress':
+        value['status'] = 'ready'
+        changed += 1
 if changed:
-    with open('$PROJECT_DIR/STATE.yaml', 'w') as f:
-        yaml.dump(state, f, default_flow_style=False, sort_keys=False)
-" 2>/dev/null && log "HEALED: reset stale in-progress environments to ready"
+    with open(path, 'w') as stream:
+        yaml.safe_dump(state, stream, sort_keys=False)
+print(changed)
+PY
+        ); then
+            [ "$_reset_count" = "0" ] || log "HEALED: reset stale in-progress environments to ready"
+        else
+            log "ERROR: resetting stale environments failed"
+            exit 1
+        fi
     fi
 fi
 
-# -- Blocker detection ---------------------------------------------------------
+# -- Blocker detection uses numeric state output, never eval -------------------
 has_blockers="no"
-if [ -f "$PROJECT_DIR/STATE.yaml" ]; then
-    blocker_section=$(sed -n '/^blockers:/,/^[a-z]/p' "$PROJECT_DIR/STATE.yaml" 2>/dev/null)
-    if echo "$blocker_section" | grep -q "description:"; then
-        has_blockers="yes"
-    fi
+if [ "${BLOCKERS:-?}" != "?" ] && [ "$BLOCKERS" -gt 0 ]; then
+    has_blockers="yes"
 fi
 
 # -- Exit early if container is not running ------------------------------------
 if [ "$container_status" != "running" ]; then
     log "ALERT: Container not running (status: $container_status)"
     log "--- monitor check end ---"
-    exit 0
+    exit 1
 fi
 
 # -- Current stats -------------------------------------------------------------
 # NOTE: {{.CPUPerc}}, {{.MemUsage}} are Docker Go template strings -- NOT machine template variables.
 cpu=$(docker stats "$CONTAINER" --no-stream --format '{{.CPUPerc}}' 2>/dev/null || echo "?")
 mem=$(docker stats "$CONTAINER" --no-stream --format '{{.MemUsage}}' 2>/dev/null || echo "?")
-head_commit=$(cd "$PROJECT_DIR" && git rev-parse --short HEAD 2>/dev/null || echo "?")
-unpushed=$(cd "$PROJECT_DIR" && git rev-list --count @{u}..HEAD 2>/dev/null || echo "?")
+head_commit=$(git -C "$PROJECT_DIR" rev-parse --short HEAD 2>/dev/null || echo "?")
+unpushed=$(git -C "$PROJECT_DIR" rev-list --count @{u}..HEAD 2>/dev/null || echo "?")
 
 # -- Silent recipe loop detection ----------------------------------------------
-last_attempt=$(docker logs "$CONTAINER" --tail 50 2>&1 | grep -oP 'attempt \K\d+' | tail -1)
+last_attempt=$(docker logs "$CONTAINER" --tail 50 2>&1 | sed -nE 's/.*attempt ([0-9]+).*/\1/p' | tail -1)
 recipe_fail_count=$(docker logs "$CONTAINER" --tail 100 2>&1 | grep -c "Recipe execution failed" || true)
 
 # -- Heartbeat freshness -------------------------------------------------------
@@ -198,12 +235,12 @@ fi
 #   11-19 epochs → CRITICAL
 #   20+ epochs   → CRITICAL + AUTO-DEFER
 if [ "$has_blockers" = "yes" ]; then
-    _aging_output=$(python3 -c "
+    if ! _aging_output=$(python3 - "$STATE_FILE" 2>> "$MONITOR_LOG" <<'PY'
 import yaml, sys
 try:
-    state = yaml.safe_load(open('$PROJECT_DIR/STATE.yaml'))
+    state = yaml.safe_load(open(sys.argv[1]))
 except Exception:
-    sys.exit(0)
+    raise
 
 environments   = state.get('environments') or {}
 current_epoch  = state.get('epoch', 0)
@@ -229,18 +266,18 @@ for blocker in (state.get('blockers') or []):
     label = str(blocker.get('description') or 'unknown')[:60]
     if age >= 20:
         lines.append(
-            f'CRITICAL: Blocker \"{label}\" stale ({age} epochs) - auto-defer recommended'
+            f'CRITICAL: Blocker "{label}" stale ({age} epochs) - auto-defer recommended'
         )
     elif age >= 11:
         lines.append(
-            f'CRITICAL: Blocker \"{label}\" stale ({age} epochs) - requires manual review'
+            f'CRITICAL: Blocker "{label}" stale ({age} epochs) - requires manual review'
         )
     elif age >= 6:
         lines.append(
-            f'WARNING: Blocker \"{label}\" aging ({age} epochs) - may need human attention'
+            f'WARNING: Blocker "{label}" aging ({age} epochs) - may need human attention'
         )
     else:
-        lines.append(f'INFO: Blocker \"{label}\" present for {age} epochs')
+        lines.append(f'INFO: Blocker "{label}" present for {age} epochs')
 
 # Check per-environment blockers (if environments have their own blocker lists)
 for env_name, env_data in (environments.items() if isinstance(environments, dict) else []):
@@ -263,30 +300,30 @@ for env_name, env_data in (environments.items() if isinstance(environments, dict
         label = str(blocker.get('description') or blocker.get('type') or 'unknown')[:60]
         if age >= 20:
             lines.append(
-                f'CRITICAL: Blocker \"{label}\" stale ({age} epochs)'
-                f' - auto-deferring environment \"{env_name}\"'
+                f'CRITICAL: Blocker "{label}" stale ({age} epochs)'
+                f' - auto-deferring environment "{env_name}"'
             )
             lines.append(
-                f'AUTO-DEFER: Environment \"{env_name}\" moved to deferred'
+                f'AUTO-DEFER: Environment "{env_name}" moved to deferred'
                 f' (blocker aged {age} epochs)'
             )
             env_data['status'] = 'deferred'
             changed = True
         elif age >= 11:
             lines.append(
-                f'CRITICAL: Blocker \"{label}\" stale ({age} epochs)'
+                f'CRITICAL: Blocker "{label}" stale ({age} epochs)'
                 f' - recommend manual review or auto-defer'
             )
         elif age >= 6:
             lines.append(
-                f'WARNING: Blocker \"{label}\" aging ({age} epochs)'
+                f'WARNING: Blocker "{label}" aging ({age} epochs)'
                 f' - may need human attention'
             )
         else:
-            lines.append(f'INFO: Blocker \"{label}\" present for {age} epochs (env: {env_name})')
+            lines.append(f'INFO: Blocker "{label}" present for {age} epochs (env: {env_name})')
 
 if changed:
-    with open('$PROJECT_DIR/STATE.yaml', 'w') as f:
+    with open(sys.argv[1], 'w') as f:
         yaml.dump(state, f, default_flow_style=False, sort_keys=False)
 
 if not lines and no_since_count > 0:
@@ -296,7 +333,11 @@ if not lines and no_since_count > 0:
     )
 
 print('\n'.join(lines))
-" 2>/dev/null) || true
+PY
+    ); then
+        log "ERROR: blocker aging failed"
+        exit 1
+    fi
 
     if [ -n "$_aging_output" ]; then
         while IFS= read -r _aging_line; do
@@ -312,19 +353,9 @@ if [ "$cpu" = "0.00%" ] && [ "$heartbeat_age" != "n/a" ] && [ "$heartbeat_age" -
     log "ALERT: Entrypoint appears dead (heartbeat ${heartbeat_age}s stale, 0% CPU)"
 fi
 
-# Pattern E: Unpushed commits — auto-push if threshold exceeded
+# Pattern E: Unpushed commits — report for explicit host-owner review
 if [ "$unpushed" != "?" ] && [ "$unpushed" -gt 10 ]; then
-    log "AUTO-FIX: $unpushed unpushed commits. Pushing..."
-    cd "$PROJECT_DIR" 2>/dev/null || true
-    git stash 2>/dev/null || true
-    git pull --rebase 2>/dev/null || true
-    if git push 2>/dev/null; then
-        NEW_UNPUSHED=$(git rev-list --count @{u}..HEAD 2>/dev/null || echo "?")
-        log "AUTO-FIX: Push successful. $NEW_UNPUSHED commits remaining."
-    else
-        log "AUTO-FIX: Push FAILED. SSH agent may be dead or no network."
-    fi
-    git stash pop 2>/dev/null || true
+    log "REVIEW: $unpushed unpushed commits. Inspect them and publish explicitly from the host only after authorization."
 fi
 
 log "--- monitor check end ---"
